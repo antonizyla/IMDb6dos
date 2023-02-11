@@ -10,38 +10,14 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-model title {
-    id                Int      @id @default(autoincrement())
-    title_id          String
-    ordering          Int
-    title             String
-    region            String
-    language          String
-    types             String[]
-    attributes        String[]
-    is_original_title Boolean
+model titles {
+    title_id        String  @id
+    title_type      String
+    primary_title   String
+    original_title  String
+    is_adult        Boolean
+    start_year      Int
+    end_year        Int
+    runtime_minutes Int
 }
 
-model actor {
-    id                 Int      @id @default(autoincrement())
-    actor_id           String
-    primary_name       String
-    birth_year         Int
-    death_year         Int
-    primary_profession String[]
-    known_for_titles   String[]
-}
-
-model rating {
-    id             Int    @id @default(autoincrement())
-    title_id       String
-    average_rating Float
-    num_votes      Int
-}
-
-model episode {
-    id              Int    @id @default(autoincrement())
-    parent_title_id String
-    season_number   Int
-    episode_number  Int
-}

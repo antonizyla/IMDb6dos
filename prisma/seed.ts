@@ -1,9 +1,9 @@
 import { randomUUID } from "crypto"
-
 import axios from 'axios'
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const es = require('event-stream');
 
 const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
@@ -38,12 +38,35 @@ async function fetchAndUnzip(filename: string, label = undefined) {
     }
 }
 
+async function seed_titles() {
+    // read file using stream to avoid memory issues
+    let s = fs.createReadStream(__dirname+`/data/title.basics.tsv`).pipe(es.split()).pipe(es.mapSync(async function(line: string) {
+        let splitLine = line.split('\t');
+        const title = await prisma.title.create({
+            data: {
+                tconst: splitLine[0],
+                titleType: splitLine[1],
+                primaryTitle: splitLine[2],
+                originalTitle: splitLine[3],
+                isAdult: Boolean(parseInt(splitLine[4])),
+                startYear: parseInt(splitLine[5]),
+                endYear: parseInt(splitLine[6]) || 0,
+                runtimeMinutes: parseInt(splitLine[7]),
+            }
+        }).catch((err: any) => {
+            console.log(err);
+        })
+    }));
+
+}
+
 
 async function main() {
     const files = ['title.ratings', 'title.akas', 'title.basics', 'title.episode', 'title.principals', 'name.basics'];
     files.forEach(async (file) => {
         fetchAndUnzip(file);
     });
+    await seed_titles();
 }
 
 main().then(async () => {
