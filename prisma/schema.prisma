@@ -19,5 +19,6 @@ model titles {
     start_year      Int
     end_year        Int
     runtime_minutes Int
+    genres          String[]
 }
 

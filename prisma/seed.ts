@@ -40,24 +40,37 @@ async function fetchAndUnzip(filename: string, label = undefined) {
 
 async function seed_titles() {
     // read file using stream to avoid memory issues
-    let s = fs.createReadStream(__dirname+`/data/title.basics.tsv`).pipe(es.split()).pipe(es.mapSync(async function(line: string) {
+    let thousandQueries: any[] = [];
+    let s = fs.createReadStream(__dirname + `/data/title.basics.tsv`).pipe(es.split()).pipe(es.mapSync(async function(line: string) {
         let splitLine = line.split('\t');
-        const title = await prisma.title.create({
-            data: {
-                tconst: splitLine[0],
-                titleType: splitLine[1],
-                primaryTitle: splitLine[2],
-                originalTitle: splitLine[3],
-                isAdult: Boolean(parseInt(splitLine[4])),
-                startYear: parseInt(splitLine[5]),
-                endYear: parseInt(splitLine[6]) || 0,
-                runtimeMinutes: parseInt(splitLine[7]),
-            }
-        }).catch((err: any) => {
-            console.log(err);
-        })
-    }));
+        if (splitLine[0] != 'tconst') {
 
+            const data = {
+                title_id: splitLine[0],
+                title_type: splitLine[1],
+                primary_title: splitLine[2],
+                original_title: splitLine[3],
+                is_adult: Boolean(parseInt(splitLine[4])),
+                start_year: parseInt(splitLine[5]) || 0,
+                end_year: parseInt(splitLine[6]) || 0,
+                runtime_minutes: parseInt(splitLine[7]) || 0,
+                genres: splitLine[8].split(','),
+            }
+            thousandQueries.push(data);
+            if (thousandQueries.length === 10000) {
+                await prisma.titles.createMany({
+                    data: thousandQueries,
+                    skipDuplicates: true,
+                });
+                console.log("inserted 10000");
+                thousandQueries = new Array();
+            }
+        }
+    }));
+    await prisma.titles.createMany({
+        data: thousandQueries,
+        skipDuplicates: true,
+    });
 }
 
 
@@ -67,6 +80,20 @@ async function main() {
         fetchAndUnzip(file);
     });
     await seed_titles();
+    //
+    /*const title = await prisma.titles.create({
+        data: {
+            title_id: randomUUID(),
+            title_type: 'movie',
+            primary_title: 'test',
+            original_title: 'test',
+            is_adult: false,
+            start_year: 2021,
+            end_year: 0,
+            runtime_minutes: 0,
+        }
+    });
+    */
 }
 
 main().then(async () => {
