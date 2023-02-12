@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,12 +20,19 @@ type DonwloadItem struct {
 func DispatchDownloads() {
 
 	os.Mkdir("data", 0777)
-	var urls = [1]DonwloadItem{{"https://datasets.imdbws.com/title.ratings.tsv.gz", "data/title.ratings.tsv.gz"}}
+	var urls = [5]DonwloadItem{{"https://datasets.imdbws.com/title.ratings.tsv.gz", "data/title.ratings.tsv.gz"},
+    {"https://datasets.imdbws.com/title.basics.tsv.gz", "data/title.basics.tsv.gz"}, {"https://datasets.imdbws.com/title.principals.tsv.gz", "data/title.principals.tsv.gz"}, {"https://datasets.imdbws.com/title.akas.tsv.gz", "data/title.akas.tsv.gz"}, {"https://datasets.imdbws.com/name.basics.tsv.gz", "data/name.basics.tsv.gz"}}
 
 	var workGroup sync.WaitGroup
 	for _, url := range urls {
-		workGroup.Add(1)
-		go ProcessItem(url, &workGroup)
+		// check for if the file exists already
+		_, error := os.Stat(url.filename[:len(url.filename)-3])
+		if errors.Is(error, os.ErrNotExist) {
+			workGroup.Add(1)
+			go ProcessItem(url, &workGroup)
+		} else {
+			fmt.Println("File already exists: ", url.filename[:len(url.filename)-3])
+		}
 	}
 	workGroup.Wait()
 }
