@@ -1,6 +1,4 @@
-package main 
-
-import "gorm.io/gorm"
+package main
 
 type book struct {
 	ID     int `gorm:"primaryKey"`
@@ -11,12 +9,19 @@ type book struct {
 }
 
 type Title struct {
-    gorm.Model
-    Name string
-    Genres         []Genre `gorm:"many2many:title_genres;"`
+	ID             int `gorm:"primaryKey"`
+	Tconst         string
+	TitleType      string
+	PrimaryTitle   string
+	OriginalTitle  string
+	IsAdult        bool
+	StartYear      int
+	EndYear        int
+	RuntimeMinutes int
+	Genres         []Genre `gorm:"many2many:title_genres;"`
 }
 
 type Genre struct {
-    gorm.Model 
-    Genre string 
+	ID     int `gorm:"primaryKey;autoIncrement;unique"`
+	Genre  string `gorm:"unique"`
 }

@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -21,7 +23,7 @@ func DispatchDownloads() {
 
 	os.Mkdir("data", 0777)
 	var urls = [5]DonwloadItem{{"https://datasets.imdbws.com/title.ratings.tsv.gz", "data/title.ratings.tsv.gz"},
-    {"https://datasets.imdbws.com/title.basics.tsv.gz", "data/title.basics.tsv.gz"}, {"https://datasets.imdbws.com/title.principals.tsv.gz", "data/title.principals.tsv.gz"}, {"https://datasets.imdbws.com/title.akas.tsv.gz", "data/title.akas.tsv.gz"}, {"https://datasets.imdbws.com/name.basics.tsv.gz", "data/name.basics.tsv.gz"}}
+		{"https://datasets.imdbws.com/title.basics.tsv.gz", "data/title.basics.tsv.gz"}, {"https://datasets.imdbws.com/title.principals.tsv.gz", "data/title.principals.tsv.gz"}, {"https://datasets.imdbws.com/title.akas.tsv.gz", "data/title.akas.tsv.gz"}, {"https://datasets.imdbws.com/name.basics.tsv.gz", "data/name.basics.tsv.gz"}}
 
 	var workGroup sync.WaitGroup
 	for _, url := range urls {
@@ -37,6 +39,95 @@ func DispatchDownloads() {
 	workGroup.Wait()
 }
 
+func read(r *bufio.Reader) ([]byte, error) {
+	var (
+		isPrefix = true
+		err      error
+		line, ln []byte
+	)
+
+	for isPrefix && err == nil {
+		line, isPrefix, err = r.ReadLine()
+		ln = append(ln, line...)
+	}
+
+	return ln, err
+}
+
+func InsertDatabaseTitles() {
+	path := "data/title.basics.tsv"
+
+	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	// scanner couldn't handle large file or i did it wrong
+	// table has 12 cols, 65k param limit for postgres => 5.45k rows per insert
+	listTitles := [5400]Title{}
+	i := 0
+	reader := bufio.NewReader(file)
+	for {
+		line, err := read(reader)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			log.Fatal(err)
+		}
+
+		if i >= 5400 {
+			db.Create(&listTitles)
+			i = 0
+		}
+		listTitles[i] = parseTitle(string(line))
+		i++
+	}
+
+	reader = bufio.NewReader(file)
+
+	db.Create(&listTitles)
+	//fmt.Println("Lines: ", lines)
+
+}
+
+func parseTitle(line string) Title {
+	arr := strings.Split(line, "\t")
+	tconst := arr[0]
+	titleType := arr[1]
+	primaryTitle := arr[2]
+	originalTitle := arr[3]
+	isAdult, _ := strconv.ParseBool(arr[4])
+	startYear, _ := strconv.Atoi(arr[5])
+	endYear, _ := strconv.Atoi(arr[6])
+	runtimeMinutes, _ := strconv.Atoi(arr[7])
+
+	genreField := strings.Split(arr[8], ",")
+    genresList := make([]Genre, len(genreField))
+	for i, genre := range genreField {
+		genresList[i] = Genre{Genre: genre}
+	}
+
+	// simplest way to do in one pass
+	// but it's not the best way to do
+
+	//db.Create(&genresList)
+
+	return Title{
+		Tconst:         tconst,
+		TitleType:      titleType,
+		PrimaryTitle:   primaryTitle,
+		OriginalTitle:  originalTitle,
+		IsAdult:        isAdult,
+		StartYear:      startYear,
+		EndYear:        endYear,
+		RuntimeMinutes: runtimeMinutes,
+		Genres:         genresList,
+	}
+
+}
+
 func ProcessItem(DItem DonwloadItem, wg *sync.WaitGroup) {
 	Download(DItem)
 	ExtractItem(DItem)
@@ -49,13 +140,13 @@ func ExtractItem(DItem DonwloadItem) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer file.Close()
 
 	gzr, err := gzip.NewReader(file)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer gzr.Close()
-	defer file.Close()
 
 	// create new file
 	newFile, err := os.Create(DItem.filename[:len(DItem.filename)-3])
@@ -64,11 +155,11 @@ func ExtractItem(DItem DonwloadItem) {
 	}
 
 	// copy data from gzr to newFile
-	scanner := bufio.NewScanner(gzr)
-	for scanner.Scan() {
-		newFile.Write(scanner.Bytes())
+	_, err = io.Copy(newFile, gzr)
+	if err != nil {
+		log.Fatal(err)
 	}
-	defer newFile.Close()
+	newFile.Close()
 
 	// remove compressed file
 	defer os.Remove(DItem.filename)

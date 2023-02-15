@@ -2,8 +2,8 @@ package main
 
 import "fmt"
 
-func insert(){
+func InsertItems(DItem DonwloadItem){
     
-    fmt.Println("insert")
+    fmt.Println(DItem.url)
 
 }

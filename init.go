@@ -14,15 +14,15 @@ var db *gorm.DB
 
 func init() {
 
-    // initalise environment variables
-    er := godotenv.Load()
-    if er != nil {
-        log.Fatalf("Error loading .env file")
-    }
+	// initalise environment variables
+	er := godotenv.Load()
+	if er != nil {
+		log.Fatalf("Error loading .env file")
+	}
 
 	// create a connection pool to the database
 	var err error
-	db, err = gorm.Open(postgres.Open("host=localhost user="+os.Getenv("POSTGRES_USER")+" password="+os.Getenv("POSTGRES_PASSWORD")+" dbname="+os.Getenv("POSTGRES_DB")+" port=5432 sslmode=disable "), &gorm.Config{})
+	db, err = gorm.Open(postgres.Open("host=localhost user="+os.Getenv("POSTGRES_USER")+" password="+os.Getenv("POSTGRES_PASSWORD")+" dbname="+os.Getenv("POSTGRES_DB")+" port=5432 sslmode=disable "), &gorm.Config{SkipDefaultTransaction: true})
 	if err != nil {
 		log.Fatal(err)
 	}
