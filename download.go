@@ -102,17 +102,11 @@ func parseTitle(line string) Title {
 	startYear, _ := strconv.Atoi(arr[5])
 	endYear, _ := strconv.Atoi(arr[6])
 	runtimeMinutes, _ := strconv.Atoi(arr[7])
+	genres := strings.Split(arr[8], ",")
 
-	genreField := strings.Split(arr[8], ",")
-    genresList := make([]Genre, len(genreField))
-	for i, genre := range genreField {
-		genresList[i] = Genre{Genre: genre}
+	if len(genres) == 1 && genres[0] == "\\N" {
+		genres = []string{"No Genre"}
 	}
-
-	// simplest way to do in one pass
-	// but it's not the best way to do
-
-	//db.Create(&genresList)
 
 	return Title{
 		Tconst:         tconst,
@@ -123,9 +117,73 @@ func parseTitle(line string) Title {
 		StartYear:      startYear,
 		EndYear:        endYear,
 		RuntimeMinutes: runtimeMinutes,
-		Genres:         genresList,
+		Genres:         genres,
 	}
 
+}
+
+func insertDatabaseActors() {
+
+	path := "data/name.basics.tsv"
+
+	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	// scanner couldn't handle large file or i did it wrong
+	// table has 12 cols, 65k param limit for postgres => 5.45k rows per insert
+	listActors := [10500]Actor{}
+	i := 0
+	reader := bufio.NewReader(file)
+	for {
+		line, err := read(reader)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			log.Fatal(err)
+		}
+
+		if i >= 10500 {
+			db.Create(&listActors)
+			i = 0
+		}
+		listActors[i] = parseActor(string(line))
+		i++
+	}
+
+	reader = bufio.NewReader(file)
+	db.Create(&listActors)
+	//fmt.Println("Lines: ", lines)
+}
+
+func parseActor(line string) Actor {
+	arr := strings.Split(line, "\t")
+	nconst := arr[0]
+	primaryName := arr[1]
+	birthYear, _ := strconv.Atoi(arr[2])
+	deathYear, _ := strconv.Atoi(arr[3])
+	primaryProfession := strings.Split(arr[4], ",")
+	knownForTitles := strings.Split(arr[5], ",")
+
+	if primaryProfession[0] == "\\N" {
+		primaryProfession = []string{"No Primary Profession"}
+	}
+
+	if knownForTitles[0] == "\\N" {
+		knownForTitles = []string{"Titles Not Found"}
+	}
+
+	return Actor{
+		Nconst:            nconst,
+		PrimaryName:       primaryName,
+		BirthYear:         birthYear,
+		DeathYear:         deathYear,
+		PrimaryProfession: primaryProfession,
+		KnownForTitles:    knownForTitles,
+	}
 }
 
 func ProcessItem(DItem DonwloadItem, wg *sync.WaitGroup) {

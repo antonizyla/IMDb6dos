@@ -34,10 +34,10 @@ func init() {
 	}
 
 	// create pool of connections
-	sqlDB.SetConnMaxIdleTime(10 * time.Second)
-	sqlDB.SetMaxIdleConns(20)
+	sqlDB.SetConnMaxIdleTime(30 * time.Second)
+	sqlDB.SetMaxIdleConns(50)
 
 	// create tables in the database from models
-	db.AutoMigrate(&Title{}, &Genre{})
+	db.AutoMigrate(&Title{}, &Actor{})
 
 }
