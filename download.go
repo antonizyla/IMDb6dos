@@ -122,7 +122,7 @@ func parseTitle(line string) Title {
 
 }
 
-func insertDatabaseActors() {
+func InsertDatabaseActors() {
 
 	path := "data/name.basics.tsv"
 
@@ -183,6 +183,58 @@ func parseActor(line string) Actor {
 		DeathYear:         deathYear,
 		PrimaryProfession: primaryProfession,
 		KnownForTitles:    knownForTitles,
+	}
+}
+
+func insertDatabaseMoviesActors() {
+	path := "data/title.principals.tsv"
+
+	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	// scanner couldn't handle large file or i did it wrong
+	// table has 6 cols, 65k param limit for postgres => 10.83k rows per insert
+	listMoviesActors := [10800]MovieActor{}
+	i := 0
+	reader := bufio.NewReader(file)
+	for {
+		line, err := read(reader)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			log.Fatal(err)
+		}
+
+		if i >= 10800 {
+			db.Create(&listMoviesActors)
+			i = 0
+		}
+		listMoviesActors[i] = parseMovieActor(string(line))
+		i++
+	}
+	db.Create(&listMoviesActors)
+}
+
+func parseMovieActor(line string) MovieActor {
+	arr := strings.Split(line, "\t")
+	tconst := arr[0]
+	nconst := arr[1]
+	category := arr[2]
+	job := arr[3]
+	character := arr[4]
+	order, _ := strconv.Atoi(arr[5])
+
+	return MovieActor{
+		Tconst:     tconst,
+		Ordering:   order,
+		Nconst:     nconst,
+		Category:   category,
+		Job:        job,
+		Characters: character,
 	}
 }
 

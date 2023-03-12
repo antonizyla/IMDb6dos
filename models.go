@@ -11,8 +11,8 @@ type book struct {
 }
 
 type Title struct {
-	ID             int `gorm:"primaryKey"`
-	Tconst         string
+	ID             int    `gorm:"primaryKey"`
+	Tconst         string `gorm:"index unique"`
 	TitleType      string
 	PrimaryTitle   string
 	OriginalTitle  string
@@ -24,11 +24,21 @@ type Title struct {
 }
 
 type Actor struct {
-    ID               int `gorm:"primaryKey"`
-    Nconst           string
-    PrimaryName      string
-    BirthYear        int
-    DeathYear        int
-    PrimaryProfession pq.StringArray `gorm:"type:text[]"`
-    KnownForTitles   pq.StringArray `gorm:"type:text[]"`
+	ID                int    `gorm:"primaryKey"`
+	Nconst            string `gorm:"index unique"`
+	PrimaryName       string
+	BirthYear         int
+	DeathYear         int
+	PrimaryProfession pq.StringArray `gorm:"type:text[]"`
+	KnownForTitles    pq.StringArray `gorm:"type:text[]"`
+}
+
+type MovieActor struct {
+	ID         int    `gorm:"primaryKey autoIncrement"`
+	Tconst     string `gorm:"index"`
+	Ordering   int
+	Nconst     string `gorm:"index"`
+	Category   string
+	Job        string
+	Characters string
 }

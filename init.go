@@ -38,6 +38,12 @@ func init() {
 	sqlDB.SetMaxIdleConns(50)
 
 	// create tables in the database from models
-	db.AutoMigrate(&Title{}, &Actor{})
+	db.AutoMigrate(&Title{}, &Actor{}, &MovieActor{})
 
+	// db.Exec("ALTER TABLE titles ADD UNIQUE (tconst);")
+	// db.Exec("ALTER TABLE actors ADD UNIQUE (nconst);")
+
+	db.Exec("ALTER TABLE movie_actors ADD FOREIGN KEY (tconst) REFERENCES titles(tconst) ON DELETE CASCADE;")
+
+	db.Exec("ALTER TABLE movie_actors ADD FOREIGN KEY (nconst) REFERENCES actors(nconst) ON DELETE CASCADE;")
 }
