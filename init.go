@@ -12,6 +12,42 @@ import (
 
 var db *gorm.DB
 
+var createTables = `
+CREATE TABLE IF NOT EXISTS titles (
+    tconst VARCHAR(255) PRIMARY KEY NOT NULL UNIQUE,
+    titleType VARCHAR(255),
+    primaryTitle VARCHAR(255),
+    originalTitle VARCHAR(255),
+    isAdult BOOLEAN,
+    startYear INT,
+    endYear INT,
+    runtimeMinutes INT,
+    genres TEXT[]
+);
+
+CREATE TABLE IF NOT EXISTS actors (
+    nconst VARCHAR(255) PRIMARY KEY NOT NULL UNIQUE,
+    primaryName VARCHAR(255),
+    birthYear INT,
+    deathYear INT,
+    primaryProfession TEXT[],
+    knownForTitles TEXT[]
+);
+
+CREATE TABLE IF NOT EXISTS movie_actors (
+    id SERIAL PRIMARY KEY,
+    tconst VARCHAR(255) NOT NULL,
+    nconst VARCHAR(255) NOT NULL,
+    ordering INT,
+    category VARCHAR(255),
+    job VARCHAR(255),
+    characters TEXT[]
+    FOREIGN KEY (tconst) REFERENCES titles(tconst) ON DELETE CASCADE,
+    FOREIGN KEY (nconst) REFERENCES actors(nconst) ON DELETE CASCADE
+);
+`
+
+
 func init() {
 
 	// initalise environment variables

@@ -1,9 +1,16 @@
 package main
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+)
+
+type Env struct {
+    db *sql.DB
+}
 
 func main() {
 	DispatchDownloads()
     fmt.Println(getActor("nm0000001"))
-    fmt.Println(getActors("tt7348214"))
+    fmt.Println(getConnectedActors("tt7348214"))
 }
