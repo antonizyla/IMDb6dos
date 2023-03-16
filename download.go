@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/blockloop/scan"
 	"github.com/lib/pq"
 )
 
@@ -51,9 +50,9 @@ func DispatchInsertions() {
 	wg.Wait()
 	// insert link between titles and actors
 	insertDatabaseMoviesActors()
-    
-    // delete all data files to free up space 
-    os.RemoveAll("data")
+
+	// delete all data files to free up space
+	os.RemoveAll("data")
 }
 
 func InsertDatabaseTitlesWrap(wg *sync.WaitGroup) {
@@ -88,7 +87,7 @@ func InsertDatabaseTitles() {
 	handleError(err)
 	defer file.Close()
 
-    fmt.Println("Inserting titles into database")
+	fmt.Println("Inserting titles into database")
 
 	transaction, err := db.Begin()
 	handleError(err)
@@ -122,7 +121,7 @@ func InsertDatabaseTitles() {
 	err = transaction.Commit()
 	handleError(err)
 
-    fmt.Println("Inserted titles")
+	fmt.Println("Inserted titles")
 
 }
 
@@ -163,7 +162,7 @@ func InsertDatabaseActors() {
 	handleError(err)
 	defer file.Close()
 
-    fmt.Println("Inserting actors into database")
+	fmt.Println("Inserting actors into database")
 
 	transaction, err := db.Begin()
 	handleError(err)
@@ -198,7 +197,7 @@ func InsertDatabaseActors() {
 	err = transaction.Commit()
 	handleError(err)
 
-    fmt.Println("Finished inserting actors into database")
+	fmt.Println("Finished inserting actors into database")
 
 }
 
@@ -242,7 +241,7 @@ func insertDatabaseMoviesActors() {
 	_, err = db.Exec("ALTER TABLE title_actors DROP CONSTRAINT title_actors_nconst_fkey")
 	handleError(err)
 
-    fmt.Println("Inserting data into title_actors table...")
+	fmt.Println("Inserting data into title_actors table...")
 
 	transaction, err := db.Begin()
 	handleError(err)
@@ -251,7 +250,7 @@ func insertDatabaseMoviesActors() {
 	handleError(err)
 
 	reader := bufio.NewReader(file)
-    i := 0 
+	i := 0
 	for {
 		line, err := read(reader)
 		if err != nil {
@@ -260,12 +259,12 @@ func insertDatabaseMoviesActors() {
 			}
 			log.Fatal(err)
 		}
-        if i > 0 {
-		movieActor := parseTitleActor(string(line))
-		_, err = stmt.Exec(movieActor.Tconst, movieActor.Nconst, movieActor.Ordering, movieActor.Category, movieActor.Job, movieActor.Characters)
-		handleError(err)
-        }
-        i++
+		if i > 0 {
+			movieActor := parseTitleActor(string(line))
+			_, err = stmt.Exec(movieActor.Tconst, movieActor.Nconst, movieActor.Title_ordering, movieActor.Category, movieActor.Job, movieActor.Characters)
+			handleError(err)
+		}
+		i++
 	}
 
 	_, err = stmt.Exec()
@@ -296,16 +295,8 @@ func insertDatabaseMoviesActors() {
 	_, err = db.Exec("CREATE INDEX title_actors_nconst_idx ON title_actors (nconst)")
 	handleError(err)
 
-    fmt.Println("Done inserting data into title_actors table...")
+	fmt.Println("Done inserting data into title_actors table...")
 
-}
-
-func titleExists(tconst string) bool {
-	rows, err := db.Query("SELECT count(1) FROM titles WHERE tconst = $1 LIMIT 1", tconst)
-	handleError(err)
-	var affected int
-	err = scan.Row(&affected, rows)
-	return affected == 1
 }
 
 func parseTitleActor(line string) MovieActor {
@@ -324,12 +315,12 @@ func parseTitleActor(line string) MovieActor {
 	order, _ := strconv.Atoi(arr[1])
 
 	return MovieActor{
-		Tconst:     tconst,
-		Ordering:   order,
-		Nconst:     nconst,
-		Category:   category,
-		Job:        job,
-		Characters: character,
+		Tconst:         tconst,
+		Title_ordering: order,
+		Nconst:         nconst,
+		Category:       category,
+		Job:            job,
+		Characters:     character,
 	}
 }
 
