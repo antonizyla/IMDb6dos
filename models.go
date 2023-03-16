@@ -1,18 +1,8 @@
 package main
 
-import "github.com/lib/pq"
-
-type book struct {
-	ID     int `gorm:"primaryKey"`
-	Title  string
-	Author string
-	Isb    bool
-	End    int
-}
-
 type Title struct {
-	ID             int    `gorm:"primaryKey"`
-	Tconst         string `gorm:"index unique"`
+	ID             int
+	Tconst         string
 	TitleType      string
 	PrimaryTitle   string
 	OriginalTitle  string
@@ -20,24 +10,24 @@ type Title struct {
 	StartYear      int
 	EndYear        int
 	RuntimeMinutes int
-	Genres         pq.StringArray `gorm:"type:text[]"`
+	Genres         []string
 }
 
 type Actor struct {
-	ID                int    `gorm:"primaryKey"`
-	Nconst            string `gorm:"index unique"`
+	ID                int
+	Nconst            string
 	PrimaryName       string
 	BirthYear         int
 	DeathYear         int
-	PrimaryProfession pq.StringArray `gorm:"type:text[]"`
-	KnownForTitles    pq.StringArray `gorm:"type:text[]"`
+	PrimaryProfession []string
+	KnownForTitles    []string
 }
 
 type MovieActor struct {
-	ID         int    `gorm:"primaryKey autoIncrement"`
-	Tconst     string `gorm:"index"`
+	ID         int
+	Tconst     string
 	Ordering   int
-	Nconst     string `gorm:"index"`
+	Nconst     string
 	Category   string
 	Job        string
 	Characters string

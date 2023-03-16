@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/blockloop/scan"
+	"github.com/lib/pq"
 )
 
 type DonwloadItem struct {
@@ -58,15 +61,15 @@ func InsertDatabaseTitles() {
 	path := "data/title.basics.tsv"
 
 	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		log.Fatal(err)
-	}
+	handleError(err)
 	defer file.Close()
 
-	// scanner couldn't handle large file or i did it wrong
-	// table has 12 cols, 65k param limit for postgres => 5.45k rows per insert
-	listTitles := [5400]Title{}
-	i := 0
+	transaction, err := db.Begin()
+	handleError(err)
+
+	stmt, err := transaction.Prepare(pq.CopyIn("titles", "tconst", "titletype", "primarytitle", "originaltitle", "isadult", "startyear", "endyear", "runtimeminutes", "genres"))
+	handleError(err)
+
 	reader := bufio.NewReader(file)
 	for {
 		line, err := read(reader)
@@ -77,18 +80,18 @@ func InsertDatabaseTitles() {
 			log.Fatal(err)
 		}
 
-		if i >= 5400 {
-			db.Create(&listTitles)
-			i = 0
-		}
-		listTitles[i] = parseTitle(string(line))
-		i++
+		title := parseTitle(string(line))
+		_, err = stmt.Exec(title.Tconst, title.TitleType, title.PrimaryTitle, title.OriginalTitle, title.IsAdult, title.StartYear, title.EndYear, title.RuntimeMinutes, pq.Array(title.Genres))
+		handleError(err)
 	}
+	_, err = stmt.Exec()
+	handleError(err)
 
-	reader = bufio.NewReader(file)
+	err = stmt.Close()
+	handleError(err)
 
-	db.Create(&listTitles)
-	//fmt.Println("Lines: ", lines)
+	err = transaction.Commit()
+	handleError(err)
 
 }
 
@@ -127,15 +130,15 @@ func InsertDatabaseActors() {
 	path := "data/name.basics.tsv"
 
 	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		log.Fatal(err)
-	}
+	handleError(err)
 	defer file.Close()
 
-	// scanner couldn't handle large file or i did it wrong
-	// table has 12 cols, 65k param limit for postgres => 5.45k rows per insert
-	listActors := [10500]Actor{}
-	i := 0
+	transaction, err := db.Begin()
+	handleError(err)
+
+	stmt, err := transaction.Prepare(pq.CopyIn("actors", "nconst", "primaryname", "birthyear", "deathyear", "primaryprofession", "knownfortitles"))
+	handleError(err)
+
 	reader := bufio.NewReader(file)
 	for {
 		line, err := read(reader)
@@ -145,18 +148,20 @@ func InsertDatabaseActors() {
 			}
 			log.Fatal(err)
 		}
-
-		if i >= 10500 {
-			db.Create(&listActors)
-			i = 0
-		}
-		listActors[i] = parseActor(string(line))
-		i++
+		actor := parseActor(string(line))
+		_, err = stmt.Exec(actor.Nconst, actor.PrimaryName, actor.BirthYear, actor.DeathYear, pq.Array(actor.PrimaryProfession), pq.Array(actor.KnownForTitles))
+		handleError(err)
 	}
 
-	reader = bufio.NewReader(file)
-	db.Create(&listActors)
-	//fmt.Println("Lines: ", lines)
+	_, err = stmt.Exec()
+	handleError(err)
+
+	err = stmt.Close()
+	handleError(err)
+
+	err = transaction.Commit()
+	handleError(err)
+
 }
 
 func parseActor(line string) Actor {
@@ -190,15 +195,18 @@ func insertDatabaseMoviesActors() {
 	path := "data/title.principals.tsv"
 
 	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		log.Fatal(err)
-	}
+	handleError(err)
 	defer file.Close()
 
-	// scanner couldn't handle large file or i did it wrong
-	// table has 6 cols, 65k param limit for postgres => 10.83k rows per insert
-	listMoviesActors := [10800]MovieActor{}
-	i := 0
+	transaction, err := db.Begin()
+	handleError(err)
+
+	stmt, err := transaction.Prepare(pq.CopyIn("title_actors", "tconst", "nconst", "title_ordering", "category", "job", "characters"))
+	handleError(err)
+
+	var missingTitles = make(map[string]int)
+	var missingTitlesList []string
+
 	reader := bufio.NewReader(file)
 	for {
 		line, err := read(reader)
@@ -208,25 +216,57 @@ func insertDatabaseMoviesActors() {
 			}
 			log.Fatal(err)
 		}
+		movieActor := parseTitleActor(string(line))
 
-		if i >= 10800 {
-			db.Create(&listMoviesActors)
-			i = 0
+		if titleExists(movieActor.Tconst) {
+			_, err = stmt.Exec(movieActor.Tconst, movieActor.Nconst, movieActor.Ordering, movieActor.Category, movieActor.Job, movieActor.Characters)
+			handleError(err)
+		} else {
+			missingTitles[movieActor.Tconst] = 1
+			_, contains := missingTitles[movieActor.Tconst]
+			if contains {
+				missingTitlesList = append(missingTitlesList, movieActor.Tconst)
+			}
+			fmt.Println("Missing Title: ", movieActor.Tconst)
 		}
-		listMoviesActors[i] = parseMovieActor(string(line))
-		i++
 	}
-	db.Create(&listMoviesActors)
+
+	fmt.Println("Missing Titles: ", missingTitlesList)
+	fmt.Println("Missing Titles Count: ", len(missingTitlesList))
+	fmt.Println("Missing Titles: ", missingTitles)
+
+	_, err = stmt.Exec()
+	handleError(err)
+
+	err = stmt.Close()
+	handleError(err)
+
+	err = transaction.Commit()
+	handleError(err)
 }
 
-func parseMovieActor(line string) MovieActor {
+func titleExists(tconst string) bool {
+	rows, err := db.Query("SELECT count(1) FROM titles WHERE tconst = $1 LIMIT 1", tconst)
+	handleError(err)
+	var affected int
+	err = scan.Row(&affected, rows)
+	return affected == 1
+}
+
+func parseTitleActor(line string) MovieActor {
 	arr := strings.Split(line, "\t")
 	tconst := arr[0]
-	nconst := arr[1]
-	category := arr[2]
-	job := arr[3]
-	character := arr[4]
-	order, _ := strconv.Atoi(arr[5])
+	nconst := arr[2]
+	category := arr[3]
+	job := arr[4]
+	if job == "\\N" {
+		job = "No Job"
+	}
+	character := arr[5]
+	if character == "\\N" {
+		character = "No Character"
+	}
+	order, _ := strconv.Atoi(arr[1])
 
 	return MovieActor{
 		Tconst:     tconst,
@@ -241,6 +281,7 @@ func parseMovieActor(line string) MovieActor {
 func ProcessItem(DItem DonwloadItem, wg *sync.WaitGroup) {
 	Download(DItem)
 	ExtractItem(DItem)
+	trimFirstLine(DItem.filename)
 	defer wg.Done()
 }
 
@@ -273,6 +314,40 @@ func ExtractItem(DItem DonwloadItem) {
 
 	// remove compressed file
 	defer os.Remove(DItem.filename)
+}
+
+func trimFirstLine(filename string) {
+	// remove the first line of each file
+	// because it contains the column names
+	filename = filename[:len(filename)-3]
+	file, err := os.Open(filename)
+	handleError(err)
+
+	newFile, err := os.Create(filename + ".new")
+	handleError(err)
+
+	reader := bufio.NewReader(file)
+	i := 0
+	for {
+		line, err := read(reader)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			log.Fatal(err)
+		}
+		if i != 0 {
+			newFile.Write(line)
+			newFile.Write([]byte("\n"))
+		}
+		i++
+	}
+
+	// remove the file with extra line at start
+	os.Remove(filename)
+
+	// rename the file with the extra line removed
+	os.Rename(filename+".new", filename)
 }
 
 func Download(DItem DonwloadItem) {

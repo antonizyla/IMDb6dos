@@ -1,23 +1,21 @@
 package main
 
 import (
+	"database/sql"
+	"fmt"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"log"
 	"os"
-	"time"
-
-	"github.com/joho/godotenv"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"runtime"
 )
-
-var db *gorm.DB
 
 var createTables = `
 CREATE TABLE IF NOT EXISTS titles (
     tconst VARCHAR(255) PRIMARY KEY NOT NULL UNIQUE,
-    titleType VARCHAR(255),
-    primaryTitle VARCHAR(255),
-    originalTitle VARCHAR(255),
+    titleType VARCHAR(32),
+    primaryTitle VARCHAR(512),
+    originalTitle VARCHAR(512),
     isAdult BOOLEAN,
     startYear INT,
     endYear INT,
@@ -34,19 +32,27 @@ CREATE TABLE IF NOT EXISTS actors (
     knownForTitles TEXT[]
 );
 
-CREATE TABLE IF NOT EXISTS movie_actors (
-    id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS title_actors (
+    ID SERIAL PRIMARY KEY,
     tconst VARCHAR(255) NOT NULL,
     nconst VARCHAR(255) NOT NULL,
-    ordering INT,
-    category VARCHAR(255),
-    job VARCHAR(255),
-    characters TEXT[]
+    title_ordering Integer,
+    category TEXT, 
+    job TEXT,
+    characters TEXT,
     FOREIGN KEY (tconst) REFERENCES titles(tconst) ON DELETE CASCADE,
     FOREIGN KEY (nconst) REFERENCES actors(nconst) ON DELETE CASCADE
 );
 `
 
+var db *sql.DB
+
+func handleError(err error) {
+	if err != nil {
+		_, filename, line, _ := runtime.Caller(1)
+		log.Fatalf("[error] %s:%d %v", filename, line, err)
+	}
+}
 
 func init() {
 
@@ -56,30 +62,29 @@ func init() {
 		log.Fatalf("Error loading .env file")
 	}
 
-	// create a connection pool to the database
-	var err error
-	db, err = gorm.Open(postgres.Open("host=localhost user="+os.Getenv("POSTGRES_USER")+" password="+os.Getenv("POSTGRES_PASSWORD")+" dbname="+os.Getenv("POSTGRES_DB")+" port=5432 sslmode=disable "), &gorm.Config{SkipDefaultTransaction: true})
+	connection := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Europe/London", os.Getenv("HOST"), os.Getenv("POSTGRES_USER"), os.Getenv("POSTGRES_PASSWORD"), os.Getenv("POSTGRES_DB"), "5432")
+
+	fmt.Println(connection)
+
+	DB, err := sql.Open("postgres", connection)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// initalise raw db connection
-	sqlDB, err := db.DB()
+	err = DB.Ping()
 	if err != nil {
 		log.Fatal(err)
+	} else {
+		fmt.Println("Connected to database")
 	}
 
-	// create pool of connections
-	sqlDB.SetConnMaxIdleTime(30 * time.Second)
-	sqlDB.SetMaxIdleConns(50)
+	_, err = DB.Exec(createTables)
+	if err != nil {
+		log.Fatal(err)
+	} else {
+		fmt.Println("Created tables")
+	}
 
-	// create tables in the database from models
-	db.AutoMigrate(&Title{}, &Actor{}, &MovieActor{})
+	db = DB
 
-	// db.Exec("ALTER TABLE titles ADD UNIQUE (tconst);")
-	// db.Exec("ALTER TABLE actors ADD UNIQUE (nconst);")
-
-	db.Exec("ALTER TABLE movie_actors ADD FOREIGN KEY (tconst) REFERENCES titles(tconst) ON DELETE CASCADE;")
-
-	db.Exec("ALTER TABLE movie_actors ADD FOREIGN KEY (nconst) REFERENCES actors(nconst) ON DELETE CASCADE;")
 }
