@@ -42,6 +42,30 @@ func DispatchDownloads() {
 	workGroup.Wait()
 }
 
+func DispatchInsertions() {
+	// titles and actors can be done in parallel
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go InsertDatabaseTitlesWrap(&wg)
+	go InsertDatabaseActorsWrap(&wg)
+	wg.Wait()
+	// insert link between titles and actors
+	insertDatabaseMoviesActors()
+    
+    // delete all data files to free up space 
+    os.RemoveAll("data")
+}
+
+func InsertDatabaseTitlesWrap(wg *sync.WaitGroup) {
+	defer wg.Done()
+	InsertDatabaseTitles()
+}
+
+func InsertDatabaseActorsWrap(wg *sync.WaitGroup) {
+	defer wg.Done()
+	InsertDatabaseActors()
+}
+
 func read(r *bufio.Reader) ([]byte, error) {
 	var (
 		isPrefix = true
@@ -64,6 +88,8 @@ func InsertDatabaseTitles() {
 	handleError(err)
 	defer file.Close()
 
+    fmt.Println("Inserting titles into database")
+
 	transaction, err := db.Begin()
 	handleError(err)
 
@@ -71,6 +97,7 @@ func InsertDatabaseTitles() {
 	handleError(err)
 
 	reader := bufio.NewReader(file)
+	i := 0
 	for {
 		line, err := read(reader)
 		if err != nil {
@@ -79,10 +106,12 @@ func InsertDatabaseTitles() {
 			}
 			log.Fatal(err)
 		}
-
-		title := parseTitle(string(line))
-		_, err = stmt.Exec(title.Tconst, title.TitleType, title.PrimaryTitle, title.OriginalTitle, title.IsAdult, title.StartYear, title.EndYear, title.RuntimeMinutes, pq.Array(title.Genres))
-		handleError(err)
+		if i > 0 {
+			title := parseTitle(string(line))
+			_, err = stmt.Exec(title.Tconst, title.TitleType, title.PrimaryTitle, title.OriginalTitle, title.IsAdult, title.StartYear, title.EndYear, title.RuntimeMinutes, pq.Array(title.Genres))
+			handleError(err)
+		}
+		i++
 	}
 	_, err = stmt.Exec()
 	handleError(err)
@@ -92,6 +121,8 @@ func InsertDatabaseTitles() {
 
 	err = transaction.Commit()
 	handleError(err)
+
+    fmt.Println("Inserted titles")
 
 }
 
@@ -122,7 +153,6 @@ func parseTitle(line string) Title {
 		RuntimeMinutes: runtimeMinutes,
 		Genres:         genres,
 	}
-
 }
 
 func InsertDatabaseActors() {
@@ -133,6 +163,8 @@ func InsertDatabaseActors() {
 	handleError(err)
 	defer file.Close()
 
+    fmt.Println("Inserting actors into database")
+
 	transaction, err := db.Begin()
 	handleError(err)
 
@@ -140,6 +172,7 @@ func InsertDatabaseActors() {
 	handleError(err)
 
 	reader := bufio.NewReader(file)
+	i := 0
 	for {
 		line, err := read(reader)
 		if err != nil {
@@ -148,9 +181,12 @@ func InsertDatabaseActors() {
 			}
 			log.Fatal(err)
 		}
-		actor := parseActor(string(line))
-		_, err = stmt.Exec(actor.Nconst, actor.PrimaryName, actor.BirthYear, actor.DeathYear, pq.Array(actor.PrimaryProfession), pq.Array(actor.KnownForTitles))
-		handleError(err)
+		if i > 0 {
+			actor := parseActor(string(line))
+			_, err = stmt.Exec(actor.Nconst, actor.PrimaryName, actor.BirthYear, actor.DeathYear, pq.Array(actor.PrimaryProfession), pq.Array(actor.KnownForTitles))
+			handleError(err)
+		}
+		i++
 	}
 
 	_, err = stmt.Exec()
@@ -161,6 +197,8 @@ func InsertDatabaseActors() {
 
 	err = transaction.Commit()
 	handleError(err)
+
+    fmt.Println("Finished inserting actors into database")
 
 }
 
@@ -198,16 +236,22 @@ func insertDatabaseMoviesActors() {
 	handleError(err)
 	defer file.Close()
 
+	// remove foreign key constraints
+	_, err = db.Exec("ALTER TABLE title_actors DROP CONSTRAINT title_actors_tconst_fkey")
+	handleError(err)
+	_, err = db.Exec("ALTER TABLE title_actors DROP CONSTRAINT title_actors_nconst_fkey")
+	handleError(err)
+
+    fmt.Println("Inserting data into title_actors table...")
+
 	transaction, err := db.Begin()
 	handleError(err)
 
 	stmt, err := transaction.Prepare(pq.CopyIn("title_actors", "tconst", "nconst", "title_ordering", "category", "job", "characters"))
 	handleError(err)
 
-	var missingTitles = make(map[string]int)
-	var missingTitlesList []string
-
 	reader := bufio.NewReader(file)
+    i := 0 
 	for {
 		line, err := read(reader)
 		if err != nil {
@@ -216,24 +260,13 @@ func insertDatabaseMoviesActors() {
 			}
 			log.Fatal(err)
 		}
+        if i > 0 {
 		movieActor := parseTitleActor(string(line))
-
-		if titleExists(movieActor.Tconst) {
-			_, err = stmt.Exec(movieActor.Tconst, movieActor.Nconst, movieActor.Ordering, movieActor.Category, movieActor.Job, movieActor.Characters)
-			handleError(err)
-		} else {
-			missingTitles[movieActor.Tconst] = 1
-			_, contains := missingTitles[movieActor.Tconst]
-			if contains {
-				missingTitlesList = append(missingTitlesList, movieActor.Tconst)
-			}
-			fmt.Println("Missing Title: ", movieActor.Tconst)
-		}
+		_, err = stmt.Exec(movieActor.Tconst, movieActor.Nconst, movieActor.Ordering, movieActor.Category, movieActor.Job, movieActor.Characters)
+		handleError(err)
+        }
+        i++
 	}
-
-	fmt.Println("Missing Titles: ", missingTitlesList)
-	fmt.Println("Missing Titles Count: ", len(missingTitlesList))
-	fmt.Println("Missing Titles: ", missingTitles)
 
 	_, err = stmt.Exec()
 	handleError(err)
@@ -243,6 +276,28 @@ func insertDatabaseMoviesActors() {
 
 	err = transaction.Commit()
 	handleError(err)
+
+	// remove all rows that don't have a corresponding title or actor
+	_, err = db.Exec("delete from title_actors where tconst in (select title_actors.tconst from title_actors left join titles on title_actors.tconst = titles.tconst where titles.tconst is null)")
+	handleError(err)
+
+	_, err = db.Exec("delete from title_actors where nconst in (select title_actors.nconst from title_actors left join actors on title_actors.nconst = actors.nconst where actors.nconst is null)")
+	handleError(err)
+
+	// regenerate foreign key constraints
+	_, err = db.Exec("ALTER TABLE title_actors ADD CONSTRAINT title_actors_tconst_fkey FOREIGN KEY (tconst) REFERENCES titles(tconst) ON DELETE CASCADE")
+	handleError(err)
+	_, err = db.Exec("ALTER TABLE title_actors ADD CONSTRAINT title_actors_nconst_fkey FOREIGN KEY (nconst) REFERENCES actors(nconst) ON DELETE CASCADE")
+	handleError(err)
+
+	// add indexes for tconst and nconst
+	_, err = db.Exec("CREATE INDEX title_actors_tconst_idx ON title_actors (tconst)")
+	handleError(err)
+	_, err = db.Exec("CREATE INDEX title_actors_nconst_idx ON title_actors (nconst)")
+	handleError(err)
+
+    fmt.Println("Done inserting data into title_actors table...")
+
 }
 
 func titleExists(tconst string) bool {
@@ -281,7 +336,6 @@ func parseTitleActor(line string) MovieActor {
 func ProcessItem(DItem DonwloadItem, wg *sync.WaitGroup) {
 	Download(DItem)
 	ExtractItem(DItem)
-	trimFirstLine(DItem.filename)
 	defer wg.Done()
 }
 
@@ -314,40 +368,6 @@ func ExtractItem(DItem DonwloadItem) {
 
 	// remove compressed file
 	defer os.Remove(DItem.filename)
-}
-
-func trimFirstLine(filename string) {
-	// remove the first line of each file
-	// because it contains the column names
-	filename = filename[:len(filename)-3]
-	file, err := os.Open(filename)
-	handleError(err)
-
-	newFile, err := os.Create(filename + ".new")
-	handleError(err)
-
-	reader := bufio.NewReader(file)
-	i := 0
-	for {
-		line, err := read(reader)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			log.Fatal(err)
-		}
-		if i != 0 {
-			newFile.Write(line)
-			newFile.Write([]byte("\n"))
-		}
-		i++
-	}
-
-	// remove the file with extra line at start
-	os.Remove(filename)
-
-	// rename the file with the extra line removed
-	os.Rename(filename+".new", filename)
 }
 
 func Download(DItem DonwloadItem) {

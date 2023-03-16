@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"flag"
+	"fmt"
 )
 
 type Env struct {
@@ -9,7 +11,15 @@ type Env struct {
 }
 
 func main() {
-    
-    insertDatabaseMoviesActors()
+
+	// Parse command line flags
+	seedptr := flag.Bool("seed", false, "Seed the database with some data")
+	flag.Parse()
+
+	if *seedptr {
+		fmt.Println("Getting Data from IMDB")
+		DispatchDownloads()
+		DispatchInsertions()
+	}
 
 }
