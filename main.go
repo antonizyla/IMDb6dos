@@ -38,6 +38,6 @@ func main() {
 	}
 
 	http.HandleFunc("/api/actors/info", actorInfoHandler)
-
+	http.HandleFunc("/api/titles/info", titlesInfoHandler)
 	http.ListenAndServe(":8080", nil)
 }
