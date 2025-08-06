@@ -1,3 +1,5 @@
+ A short program to practice using Golang by implementing Dijkstra's Algorithm on the IMDB movie and actor's database imported and sanitised into a Postgres Database. 
+
 ### Configuration:
 Requires a Postgres Database with following environment settings, can be through docker or any other service, .env file is used by the docker compose for a local container
 ```
